@@ -18,6 +18,9 @@ class AudioConfig(BaseConfig):
     # Normalization
     normalize: bool = True
     
+    # Whisper preprocessing option
+    use_whisper_preprocessing: bool = False
+    
     def validate(self):
         assert self.sample_rate > 0, "Sample rate must be positive"
         assert self.n_mels > 0, "Number of mel bands must be positive"

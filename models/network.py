@@ -27,6 +27,8 @@ class AutoSubsNetwork(nn.Module):
             backbone_output_dim = config.backbone.output_dim
         elif config.backbone.type == "transformer":
             backbone_output_dim = config.backbone.output_dim
+        elif config.backbone.type == "whisper":
+            backbone_output_dim = config.backbone.output_dim
         else:
             raise ValueError(f"Unknown backbone type: {config.backbone.type}")
         
@@ -70,6 +72,10 @@ class AutoSubsNetwork(nn.Module):
             # Transformer output: (batch_size, n_frames, feature_dim)
             # Already in correct format
             pass
+        elif self.config.backbone.type == "whisper":
+            # Whisper encoder output: (batch_size, n_frames, feature_dim)
+            # Already in correct format
+            pass
         
         # Temporal adaptation to match timing resolution
         if target_timing_length is not None:
@@ -85,7 +91,7 @@ class AutoSubsNetwork(nn.Module):
     def get_timing_predictions(
         self, 
         spectrogram: torch.Tensor,
-        timing_fps: int = 60,
+        timing_fps: int = None,
         chunk_duration: float = 30.0
     ) -> Dict[str, torch.Tensor]:
         """
@@ -93,12 +99,16 @@ class AutoSubsNetwork(nn.Module):
         
         Args:
             spectrogram: Input mel spectrogram
-            timing_fps: Target timing FPS (frames per second)
+            timing_fps: Target timing FPS (frames per second). If None, uses backbone's natural resolution.
             chunk_duration: Chunk duration in seconds
             
         Returns:
             Dictionary with timing predictions
         """
+        # Use backbone's natural temporal resolution if not specified
+        if timing_fps is None:
+            timing_fps = int(self.backbone.get_temporal_resolution())
+        
         # Calculate target timing frames
         target_timing_frames = int(chunk_duration * timing_fps)
         
@@ -116,7 +126,7 @@ class AutoSubsNetwork(nn.Module):
         self,
         spectrogram: torch.Tensor,
         time_indices: torch.Tensor,
-        timing_fps: int = 60,
+        timing_fps: int = None,
         chunk_duration: float = 30.0
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -126,12 +136,16 @@ class AutoSubsNetwork(nn.Module):
         Args:
             spectrogram: Input mel spectrogram
             time_indices: Time indices (batch_size, n_events, 2) where [..., 0] is start, [..., 1] is end
-            timing_fps: Timing FPS
+            timing_fps: Timing FPS. If None, uses backbone's natural resolution.
             chunk_duration: Chunk duration
             
         Returns:
             Tuple of (start_features, end_features) at specified times
         """
+        # Use backbone's natural temporal resolution if not specified
+        if timing_fps is None:
+            timing_fps = int(self.backbone.get_temporal_resolution())
+        
         predictions = self.get_timing_predictions(spectrogram, timing_fps, chunk_duration)
         
         batch_size = time_indices.size(0)
@@ -232,10 +246,9 @@ if __name__ == "__main__":
         # Test basic forward pass
         conv_output = conv_model(test_spectrogram)
         
-        # Test timing predictions
+        # Test timing predictions (use backbone's natural resolution)
         timing_predictions = conv_model.get_timing_predictions(
-            test_spectrogram, 
-            timing_fps=60, 
+            test_spectrogram,
             chunk_duration=30.0
         )
     
@@ -270,7 +283,6 @@ if __name__ == "__main__":
         transformer_output = transformer_model(test_spectrogram)
         transformer_timing = transformer_model.get_timing_predictions(
             test_spectrogram,
-            timing_fps=60,
             chunk_duration=30.0
         )
     
@@ -295,7 +307,6 @@ if __name__ == "__main__":
         start_feats, end_feats = conv_model.extract_features_at_times(
             test_spectrogram[:1],  # Single batch
             time_indices,
-            timing_fps=60,
             chunk_duration=30.0
         )
     

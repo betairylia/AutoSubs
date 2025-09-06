@@ -7,7 +7,7 @@ from .base import BaseConfig
 class BackboneConfig(BaseConfig):
     """Configuration for audio backbone network."""
     
-    type: str = "conv1d"  # "conv1d", "transformer"
+    type: str = "conv1d"  # "conv1d", "transformer", "whisper"
     
     # Conv1D specific parameters
     channels: List[int] = None  # [64, 128, 256, 512]
@@ -20,6 +20,9 @@ class BackboneConfig(BaseConfig):
     n_layers: int = 6
     d_ff: int = 1024
     dropout: float = 0.1
+    
+    # Whisper specific parameters
+    whisper_model_size: str = "base"  # "tiny", "base", "small", "medium", "large"
     
     # Common parameters
     input_dim: int = 128  # mel spectrogram dimension
@@ -38,6 +41,10 @@ class BackboneConfig(BaseConfig):
         if self.type == "conv1d":
             assert len(self.channels) == len(self.kernel_sizes) == len(self.strides), \
                 "Conv1D parameters must have same length"
+        elif self.type == "whisper":
+            valid_sizes = ["tiny", "base", "small", "medium", "large", "large-v1", "large-v2", "large-v3"]
+            assert self.whisper_model_size in valid_sizes, \
+                f"Whisper model size must be one of {valid_sizes}"
         assert self.input_dim > 0, "Input dimension must be positive"
         assert self.output_dim > 0, "Output dimension must be positive"
 

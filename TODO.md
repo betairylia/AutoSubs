@@ -7,6 +7,9 @@
     - DataChunk.original_subtitle_file
 - Is chunks overlapping for training? Perhaps they should not overlap?
 
+### Logging
+- Tensorboard somehow bugs when using duplicated experiment name. Append datetime.now?
+
 ### Losses
 - FocalLoss: Auto-configure config yaml `focal_alpha` & `focal_gamma`.
     - They comes from dataset inbalance.
@@ -17,3 +20,6 @@
     - As a more complicated solution:
         - Merge heatmaps and average features instead.
         - If that is against the current code structure, let the model take the responsity of merging.
+
+## Documentation
+- Remove mentionings of network structures in README, such as "Conv1D" "Transformers" as they are subject to change.

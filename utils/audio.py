@@ -9,6 +9,11 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from config.data import AudioConfig
 
+# Add Whisper support
+sys.path.append(str(Path(__file__).parent.parent / "whisper"))
+import whisper
+from whisper import audio as whisper_audio
+
 
 def load_audio(
     file_path: Union[str, Path], 
@@ -283,6 +288,108 @@ def spectrogram_to_tensor(spectrogram: np.ndarray) -> torch.Tensor:
     # Add channel dimension and convert to tensor
     tensor = torch.from_numpy(spectrogram).unsqueeze(0).float()
     return tensor
+
+
+def load_audio_whisper(
+    file_path: Union[str, Path],
+    config: Optional[AudioConfig] = None
+) -> Tuple[np.ndarray, int]:
+    """
+    Load audio file using Whisper's preprocessing.
+    
+    Args:
+        file_path: Path to audio file
+        config: Audio configuration (optional, mostly for compatibility)
+        
+    Returns:
+        Tuple of (audio_data, sample_rate) where sample_rate is always 16000
+    """
+    try:
+        # Use Whisper's audio loading (always returns 16kHz mono)
+        audio = whisper_audio.load_audio(str(file_path), sr=whisper_audio.SAMPLE_RATE)
+        
+        logging.debug(f"Loaded audio with Whisper: {file_path}, duration: {len(audio)/whisper_audio.SAMPLE_RATE:.2f}s")
+        return audio, whisper_audio.SAMPLE_RATE
+        
+    except Exception as e:
+        logging.error(f"Failed to load audio file with Whisper {file_path}: {e}")
+        raise
+
+
+def extract_mel_spectrogram_whisper(
+    audio: Union[np.ndarray, str, Path], 
+    config: Optional[AudioConfig] = None,
+    n_mels: int = 80
+) -> np.ndarray:
+    """
+    Extract mel spectrogram using Whisper's preprocessing.
+    
+    Args:
+        audio: Audio file path or numpy array (16kHz)
+        config: Audio configuration (optional, for compatibility)
+        n_mels: Number of mel bins (80 or 128, Whisper supports both)
+        
+    Returns:
+        Log-mel spectrogram (n_mels, n_frames)
+    """
+    try:
+        # Ensure audio is the right type for Whisper
+        if isinstance(audio, np.ndarray):
+            audio = torch.from_numpy(audio.astype(np.float32))
+        
+        # Use Whisper's log-mel spectrogram extraction
+        mel_spec = whisper_audio.log_mel_spectrogram(audio, n_mels=n_mels)
+        
+        # Convert to numpy and ensure correct type
+        if isinstance(mel_spec, torch.Tensor):
+            mel_spec = mel_spec.cpu().numpy()
+        
+        logging.debug(f"Extracted Whisper mel spectrogram: {mel_spec.shape}")
+        return mel_spec.astype(np.float32)
+        
+    except Exception as e:
+        logging.error(f"Failed to extract Whisper mel spectrogram: {e}")
+        raise
+
+
+def audio_to_spectrogram_whisper(
+    file_path: Union[str, Path],
+    config: Optional[AudioConfig] = None,
+    n_mels: int = 80
+) -> np.ndarray:
+    """
+    Complete pipeline using Whisper: load audio file and convert to mel spectrogram.
+    
+    Args:
+        file_path: Path to audio file
+        config: Audio configuration (optional, for compatibility)
+        n_mels: Number of mel bins (80 or 128)
+        
+    Returns:
+        Log-mel spectrogram (n_mels, n_frames)
+    """
+    # With Whisper, we can do this in one step
+    return extract_mel_spectrogram_whisper(str(file_path), config, n_mels)
+
+
+def pad_or_trim_whisper(
+    audio: Union[np.ndarray, torch.Tensor], 
+    length: int = None
+) -> Union[np.ndarray, torch.Tensor]:
+    """
+    Pad or trim audio using Whisper's method.
+    
+    Args:
+        audio: Audio array or tensor
+        length: Target length (default: 30s at 16kHz = 480000 samples)
+        
+    Returns:
+        Padded/trimmed audio
+    """
+    if length is None:
+        length = whisper_audio.N_SAMPLES  # 30s at 16kHz
+    
+    return whisper_audio.pad_or_trim(audio, length)
 
 
 def get_audio_stats(file_path: Union[str, Path]) -> dict:

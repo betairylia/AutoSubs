@@ -66,8 +66,11 @@ def chunk_audio_file(
     if chunking_config is None:
         chunking_config = ChunkingConfig()
     
-    # Load full audio
-    audio_data, sr = audio_utils.load_audio(audio_file, audio_config)
+    # Load full audio - use Whisper loading if configured
+    if audio_config.use_whisper_preprocessing:
+        audio_data, sr = audio_utils.load_audio_whisper(audio_file, audio_config)
+    else:
+        audio_data, sr = audio_utils.load_audio(audio_file, audio_config)
     total_duration = len(audio_data) / sr
     
     logging.info(f"Chunking audio file {audio_file} (duration: {total_duration:.2f}s)")
@@ -129,8 +132,15 @@ def chunk_audio_file(
                 "silence_pad_samples": chunk_samples - len(padded_chunk) + len(pre_pad_audio) + len(post_pad_audio)
             }
         
-        # Extract spectrogram
-        spectrogram = audio_utils.extract_mel_spectrogram(chunk_audio, sr, audio_config)
+        # Extract spectrogram - use Whisper preprocessing if configured
+        if audio_config.use_whisper_preprocessing:
+            spectrogram = audio_utils.extract_mel_spectrogram_whisper(
+                chunk_audio, 
+                config=audio_config, 
+                n_mels=audio_config.n_mels
+            )
+        else:
+            spectrogram = audio_utils.extract_mel_spectrogram(chunk_audio, sr, audio_config)
         
         # Create chunk
         chunk = AudioChunk(
