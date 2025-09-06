@@ -82,7 +82,7 @@ def extract_mel_spectrogram(
             mel_spec_db = normalize_spectrogram(mel_spec_db)
         
         logging.debug(f"Extracted mel spectrogram: {mel_spec_db.shape}")
-        return mel_spec_db
+        return mel_spec_db.astype(np.float32)
         
     except Exception as e:
         logging.error(f"Failed to extract mel spectrogram: {e}")
@@ -145,7 +145,8 @@ def get_audio_duration(file_path: Union[str, Path]) -> float:
         Duration in seconds
     """
     try:
-        duration = librosa.get_duration(path=file_path)
+        path_str = str(file_path) if not isinstance(file_path, str) else file_path
+        duration = librosa.get_duration(path=path_str)
         return duration
     except Exception as e:
         logging.error(f"Failed to get audio duration for {file_path}: {e}")

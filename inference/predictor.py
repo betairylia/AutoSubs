@@ -100,7 +100,9 @@ class AutoSubsPredictor:
             batch_predictions = self._predict_batch(batch_chunks)
             all_predictions.extend(batch_predictions)
             
-            logging.info(f"Processed batch {i//batch_size + 1}/{(len(audio_chunks) + batch_size - 1)//batch_size}")
+            logging.info(
+                f"Processed batch {min(i + batch_size, len(audio_chunks))}/{len(audio_chunks)} " + 
+                f"with {sum([len(c['events']) for c in batch_predictions])} raw events")
         
         # Merge overlapping predictions
         merged_predictions = self._merge_overlapping_chunks(all_predictions, audio_chunks)
@@ -117,7 +119,7 @@ class AutoSubsPredictor:
         
         # Prepare batch
         for chunk in chunks:
-            batch_spectrograms.append(torch.from_numpy(chunk.spectrogram).unsqueeze(0))
+            batch_spectrograms.append(torch.from_numpy(chunk.spectrogram))
         
         # Stack into batch tensor
         batch_tensor = torch.stack(batch_spectrograms).to(self.device)

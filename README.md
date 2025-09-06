@@ -1,3 +1,6 @@
+*This project was developed with extensive assistance from Claude, Anthropic's AI assistant.*
+^ Including this claude-preferred disclaimer! 🤗🤖
+
 # AutoSubs: ML-Based Auto Timing for Subtitling
 
 AutoSubs is a machine learning system for automatic subtitle timing prediction. Instead of manually timing each subtitle line by watching videos and listening to audio, AutoSubs uses deep learning to predict start and end timestamps from audio spectrograms.
@@ -50,7 +53,8 @@ pip install -r requirements-dev.txt
 python scripts/create_dataset.py \
     --data_dir /path/to/audio_subtitle_pairs \
     --output dataset.h5 \
-    --format hdf5
+    --format hdf5 \
+    --config configs/default.yaml
 ```
 
 Your data directory should contain paired audio and subtitle files:
@@ -78,7 +82,15 @@ python scripts/train.py \
 python scripts/inference.py \
     --model logs/my_experiment/checkpoints/best_model.pt \
     --input audio_file.wav \
-    --output subtitles.ass
+    --output subtitles.ass \
+    --config configs/default.yaml
+```
+
+### 4. Monitor Training (Optional)
+
+```bash
+# View training progress in TensorBoard
+tensorboard --logdir logs/
 ```
 
 ## 📊 Dataset Format
@@ -197,19 +209,19 @@ training:
 ### Dataset Creation
 ```bash
 # Create dataset with statistics
-python scripts/create_dataset.py --data_dir /data --output dataset.h5 --stats_only
+python scripts/create_dataset.py --data_dir /data --output dataset.h5 --stats_only --config configs/default.yaml
 
 # Create full dataset
-python scripts/create_dataset.py --data_dir /data --output dataset.h5 --format hdf5
+python scripts/create_dataset.py --data_dir /data --output dataset.h5 --format hdf5 --config configs/default.yaml
 ```
 
 ### Dataset Validation  
 ```bash
 # Validate dataset integrity
-python scripts/validate_dataset.py --dataset dataset.h5 --show_splits --test_loading
+python scripts/validate_dataset.py --dataset dataset.h5 --show_splits --test_loading --config configs/default.yaml
 
 # Quick validation
-python scripts/validate_dataset.py --dataset dataset.h5
+python scripts/validate_dataset.py --dataset dataset.h5 --config configs/default.yaml
 ```
 
 ### Training
@@ -218,22 +230,22 @@ python scripts/validate_dataset.py --dataset dataset.h5
 python scripts/train.py --dataset dataset.h5 --config my_config.yaml
 
 # Resume training
-python scripts/train.py --dataset dataset.h5 --resume checkpoint.pt
+python scripts/train.py --dataset dataset.h5 --config configs/default.yaml --resume checkpoint.pt
 
 # Override config parameters
-python scripts/train.py --dataset dataset.h5 --batch_size 32 --lr 0.0005
+python scripts/train.py --dataset dataset.h5 --config configs/default.yaml --batch_size 32 --lr 0.0005
 ```
 
 ### Inference
 ```bash
 # Basic inference
-python scripts/inference.py --model model.pt --input audio.wav --output subs.ass
+python scripts/inference.py --model model.pt --input audio.wav --output subs.ass --config configs/default.yaml
 
 # With audio analysis
-python scripts/inference.py --model model.pt --input audio.wav --output subs.ass --stats
+python scripts/inference.py --model model.pt --input audio.wav --output subs.ass --config configs/default.yaml --stats
 
 # Batch processing with custom overlap
-python scripts/inference.py --model model.pt --input audio.wav --output subs.ass --batch_size 8 --overlap 0.2
+python scripts/inference.py --model model.pt --input audio.wav --output subs.ass --config configs/default.yaml --batch_size 8 --overlap 0.2
 ```
 
 ## 📈 Training Details
@@ -390,9 +402,7 @@ Contributions welcome! Areas for improvement:
 
 ## 📚 References
 
-- Law, H., & Deng, J. (2018). CornerNet: Detecting Objects as Paired Keypoints. ECCV.
-- Lin, T. Y., et al. (2017). Focal Loss for Dense Object Detection. ICCV.
-- Vaswani, A., et al. (2017). Attention Is All You Need. NIPS.
+TODO!
 
 ---
 

@@ -10,3 +10,10 @@
 ### Losses
 - FocalLoss: Auto-configure config yaml `focal_alpha` & `focal_gamma`.
     - They comes from dataset inbalance.
+
+### Inference
+- `_merge_overlapping_chunks` should not directly merge events by time. 1.0s is also too brutal. Many events will get eliminated.
+    - At least, only merge events from different chunks. Implement this first.
+    - As a more complicated solution:
+        - Merge heatmaps and average features instead.
+        - If that is against the current code structure, let the model take the responsity of merging.

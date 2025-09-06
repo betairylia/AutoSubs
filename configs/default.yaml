@@ -32,8 +32,8 @@ model:
   
   # Post-processing parameters
   nmp_window_size: 5
-  confidence_threshold: 0.5
-  feature_distance_threshold: 2.0
+  confidence_threshold: 0.1
+  feature_distance_threshold: 20.0
   max_subtitle_length: 10.0
 
 # Data processing configuration

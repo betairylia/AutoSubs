@@ -14,7 +14,7 @@ import time
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
-sys.path.append(str(project_root))
+sys.path.insert(0, str(project_root))
 
 from inference.predictor import create_predictor
 from utils.audio import get_audio_duration, get_audio_stats
