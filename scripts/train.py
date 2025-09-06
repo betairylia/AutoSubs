@@ -18,7 +18,7 @@ project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
 from config.config import load_config
-from data.dataset import HDF5DatasetStorage, PyTorchDatasetStorage, AutoSubsDataset, split_dataset
+from data.dataset import HDF5DatasetStorage, PyTorchDatasetStorage, AutoSubsDataset, split_dataset, collate_fn
 from training.trainer import AutoSubsTrainer
 
 
@@ -133,7 +133,8 @@ def main():
         batch_size=config.training.batch_size,
         shuffle=True,
         num_workers=config.training.num_workers,
-        pin_memory=config.training.pin_memory
+        pin_memory=config.training.pin_memory,
+        collate_fn=collate_fn
     )
     
     val_loader = None
@@ -143,7 +144,8 @@ def main():
             batch_size=config.training.batch_size,
             shuffle=False,
             num_workers=config.training.num_workers,
-            pin_memory=config.training.pin_memory
+            pin_memory=config.training.pin_memory,
+            collate_fn=collate_fn
         )
     
     # Create trainer

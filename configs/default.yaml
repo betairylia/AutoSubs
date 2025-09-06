@@ -82,7 +82,7 @@ training:
   
   # Device and performance
   device: "auto"  # auto-detect
-  num_workers: 4
+  num_workers: 0
   pin_memory: true
   
   # Validation and checkpointing
@@ -123,4 +123,4 @@ training:
     feature_weight: 0.5
   
   # Mixed precision
-  use_amp: true
+  use_amp: false

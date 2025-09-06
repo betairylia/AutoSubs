@@ -199,7 +199,7 @@ class AutoSubsTrainer:
             
             # Forward pass with mixed precision
             if self.scaler:
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast(str(self.device)):
                     outputs = self._forward_pass(batch)
                     loss_dict = self._compute_loss(outputs, batch)
                 
@@ -293,7 +293,7 @@ class AutoSubsTrainer:
     def _forward_pass(self, batch: Dict) -> Dict:
         """Forward pass through the model."""
         spectrogram = batch["spectrogram"]
-        n_frames = batch["n_frames"][0].item()  # Assuming same for all in batch
+        n_frames = batch["n_frames"][0] if isinstance(batch["n_frames"], list) else batch["n_frames"][0].item()  # Handle both list and tensor format
         
         outputs = self.model.get_timing_predictions(
             spectrogram,

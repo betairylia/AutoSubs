@@ -15,6 +15,77 @@ from data.chunking import DataChunk, create_data_chunks
 from data.utils import find_audio_subtitle_pairs
 
 
+def collate_fn(batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+    """
+    Custom collate function to handle variable-length tensors.
+    
+    Pads all tensors to the maximum length in the batch.
+    """
+    if not batch:
+        return {}
+    
+    # Get maximum dimensions for padding
+    max_spectrogram_frames = max(sample["spectrogram"].shape[1] for sample in batch)
+    max_timing_frames = max(sample["start_heatmap"].shape[0] for sample in batch)
+    max_positive_pairs = max(sample["positive_pairs"].shape[0] if sample["positive_pairs"].numel() > 0 else 0 for sample in batch)
+    
+    batch_size = len(batch)
+    n_mels = batch[0]["spectrogram"].shape[0]
+    
+    # Initialize padded tensors
+    spectrograms = torch.zeros(batch_size, n_mels, max_spectrogram_frames)
+    start_heatmaps = torch.zeros(batch_size, max_timing_frames)
+    end_heatmaps = torch.zeros(batch_size, max_timing_frames)
+    
+    # Handle positive pairs - use -1 as padding value
+    positive_pairs = torch.full((batch_size, max_positive_pairs, 2), -1, dtype=torch.long)
+    
+    # Store original lengths
+    spectrogram_lengths = torch.zeros(batch_size, dtype=torch.long)
+    timing_lengths = torch.zeros(batch_size, dtype=torch.long)
+    positive_pairs_lengths = torch.zeros(batch_size, dtype=torch.long)
+    
+    chunk_ids = []
+    n_frames_list = []
+    
+    for i, sample in enumerate(batch):
+        # Copy spectrogram
+        spec = sample["spectrogram"]
+        spectrograms[i, :, :spec.shape[1]] = spec
+        spectrogram_lengths[i] = spec.shape[1]
+        
+        # Copy heatmaps
+        start_hmap = sample["start_heatmap"]
+        end_hmap = sample["end_heatmap"]
+        start_heatmaps[i, :start_hmap.shape[0]] = start_hmap
+        end_heatmaps[i, :end_hmap.shape[0]] = end_hmap
+        timing_lengths[i] = start_hmap.shape[0]
+        
+        # Copy positive pairs
+        pos_pairs = sample["positive_pairs"]
+        if pos_pairs.numel() > 0:
+            n_pairs = pos_pairs.shape[0]
+            positive_pairs[i, :n_pairs, :] = pos_pairs
+            positive_pairs_lengths[i] = n_pairs
+        else:
+            positive_pairs_lengths[i] = 0
+        
+        chunk_ids.append(sample["chunk_id"])
+        n_frames_list.append(sample["n_frames"])
+    
+    return {
+        "spectrogram": spectrograms,
+        "start_heatmap": start_heatmaps, 
+        "end_heatmap": end_heatmaps,
+        "positive_pairs": positive_pairs,
+        "spectrogram_lengths": spectrogram_lengths,
+        "timing_lengths": timing_lengths,
+        "positive_pairs_lengths": positive_pairs_lengths,
+        "chunk_ids": chunk_ids,
+        "n_frames": n_frames_list
+    }
+
+
 class AutoSubsDataset(Dataset):
     """PyTorch Dataset for AutoSubs training data."""
     
