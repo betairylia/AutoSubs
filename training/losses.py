@@ -87,70 +87,60 @@ class ContrastiveFeatureLoss(nn.Module):
         Returns:
             Contrastive loss value
         """
-        batch_size = start_features.size(0)
-        n_frames = start_features.size(1)
-        feature_dim = start_features.size(2)
+        batch_size, n_frames, feature_dim = start_features.shape
+        device = start_features.device
         
-        total_loss = 0.0
-        n_valid_batches = 0
+        # Create mask for valid pairs (not -1 padding)
+        valid_mask = (positive_pairs[:, :, 0] >= 0) & (positive_pairs[:, :, 1] >= 0)
         
-        for b in range(batch_size):
-            batch_positive_pairs = positive_pairs[b]
-            
-            # Skip if no positive pairs
-            if batch_positive_pairs.size(0) == 0:
-                continue
-            
-            # Extract positive pair features
-            pos_start_feats = []
-            pos_end_feats = []
-            
-            for pair_idx in range(batch_positive_pairs.size(0)):
-                start_idx = batch_positive_pairs[pair_idx, 0].long()
-                end_idx = batch_positive_pairs[pair_idx, 1].long()
-                
-                # Clamp indices
-                start_idx = torch.clamp(start_idx, 0, n_frames - 1)
-                end_idx = torch.clamp(end_idx, 0, n_frames - 1)
-                
-                pos_start_feats.append(start_features[b, start_idx])
-                pos_end_feats.append(end_features[b, end_idx])
-            
-            if not pos_start_feats:
-                continue
-            
-            pos_start_feats = torch.stack(pos_start_feats)  # (n_pos_pairs, feature_dim)
-            pos_end_feats = torch.stack(pos_end_feats)
-            
-            # Positive loss (pull together)
-            pos_distances = F.pairwise_distance(pos_start_feats, pos_end_feats, p=2)
-            pos_loss = pos_distances.mean()
-            
-            # Generate negative pairs (mismatched combinations)
-            neg_loss = 0.0
-            if batch_positive_pairs.size(0) > 1:
-                # Create negative pairs by mismatching positive pairs
-                n_pos = batch_positive_pairs.size(0)
-                
-                for i in range(n_pos):
-                    for j in range(n_pos):
-                        if i != j:  # Don't pair with itself
-                            neg_distance = F.pairwise_distance(
-                                pos_start_feats[i:i+1], 
-                                pos_end_feats[j:j+1], 
-                                p=2
-                            )
-                            # Apply margin (push apart)
-                            neg_loss += torch.clamp(self.margin - neg_distance, min=0.0)
-                
-                neg_loss = neg_loss / (n_pos * (n_pos - 1))  # Average over negative pairs
-            
-            # Combine positive and negative losses
-            batch_loss = pos_loss + neg_loss
-            total_loss += batch_loss
-            n_valid_batches += 1
+        if not valid_mask.any():
+            return torch.zeros(1, device=device, dtype=start_features.dtype, requires_grad=start_features.requires_grad).squeeze()
         
-        return total_loss / max(n_valid_batches, 1)
+        # Clamp indices to valid range
+        start_indices = torch.clamp(positive_pairs[:, :, 0], 0, n_frames - 1)
+        end_indices = torch.clamp(positive_pairs[:, :, 1], 0, n_frames - 1)
+        
+        # Create batch indices for advanced indexing
+        batch_indices = torch.arange(batch_size, device=device).unsqueeze(1).expand(-1, positive_pairs.size(1))
+        
+        # Gather features using advanced indexing - only for valid pairs
+        # Flatten for gathering
+        flat_batch_indices = batch_indices[valid_mask]
+        flat_start_indices = start_indices[valid_mask]
+        flat_end_indices = end_indices[valid_mask]
+        
+        if len(flat_batch_indices) == 0:
+            return torch.zeros(1, device=device, dtype=start_features.dtype, requires_grad=start_features.requires_grad).squeeze()
+        
+        pos_start_feats = start_features[flat_batch_indices, flat_start_indices]  # (n_valid_pairs, feature_dim)
+        pos_end_feats = end_features[flat_batch_indices, flat_end_indices]
+        
+        # Positive loss (pull together) - L2 distance
+        pos_distances = torch.norm(pos_start_feats - pos_end_feats, p=2, dim=1)
+        pos_loss = pos_distances.mean()
+        
+        # Generate negative pairs efficiently using broadcasting
+        neg_loss = torch.tensor(0.0, device=device)
+        n_pos = len(pos_start_feats)
+        
+        if n_pos > 1:
+            # Create all pairwise combinations efficiently
+            # pos_start_feats: (n_pos, feature_dim) -> (n_pos, 1, feature_dim)
+            # pos_end_feats: (n_pos, feature_dim) -> (1, n_pos, feature_dim)
+            start_expanded = pos_start_feats.unsqueeze(1)  # (n_pos, 1, feature_dim)
+            end_expanded = pos_end_feats.unsqueeze(0)      # (1, n_pos, feature_dim)
+            
+            # Compute all pairwise distances at once
+            neg_distances = torch.norm(start_expanded - end_expanded, p=2, dim=2)  # (n_pos, n_pos)
+            
+            # Create mask to exclude diagonal (i != j)
+            mask = ~torch.eye(n_pos, device=device, dtype=torch.bool)
+            
+            # Apply margin and clamp
+            valid_neg_distances = neg_distances[mask]
+            neg_loss = torch.clamp(self.margin - valid_neg_distances, min=0.0).mean()
+        
+        return pos_loss + neg_loss
 
 
 class InfoNCELoss(nn.Module):
@@ -180,49 +170,61 @@ class InfoNCELoss(nn.Module):
         Returns:
             InfoNCE loss value
         """
-        batch_size = start_features.size(0)
-        total_loss = 0.0
-        n_valid_batches = 0
+        batch_size, n_frames, feature_dim = start_features.shape
+        device = start_features.device
         
-        for b in range(batch_size):
-            batch_pairs = positive_pairs[b]
-            
-            if batch_pairs.size(0) == 0:
-                continue
-            
-            # Extract features for this batch
-            batch_start_features = []
-            batch_end_features = []
-            
-            for pair_idx in range(batch_pairs.size(0)):
-                start_idx = torch.clamp(batch_pairs[pair_idx, 0].long(), 0, start_features.size(1) - 1)
-                end_idx = torch.clamp(batch_pairs[pair_idx, 1].long(), 0, end_features.size(1) - 1)
-                
-                batch_start_features.append(start_features[b, start_idx])
-                batch_end_features.append(end_features[b, end_idx])
-            
-            if not batch_start_features:
-                continue
-            
-            anchor_features = torch.stack(batch_start_features)  # (n_pairs, feature_dim)
-            positive_features = torch.stack(batch_end_features)  # (n_pairs, feature_dim)
-            
-            # Compute similarities
-            pos_similarities = F.cosine_similarity(anchor_features, positive_features, dim=1)
-            pos_similarities = pos_similarities / self.temperature
-            
-            # Create negative samples (all other end features)
-            neg_similarities = torch.matmul(anchor_features, positive_features.T) / self.temperature
-            
-            # InfoNCE loss
-            logits = torch.cat([pos_similarities.unsqueeze(1), neg_similarities], dim=1)
-            targets = torch.zeros(logits.size(0), dtype=torch.long, device=logits.device)
-            
-            batch_loss = F.cross_entropy(logits, targets)
-            total_loss += batch_loss
-            n_valid_batches += 1
+        # Create mask for valid pairs (not -1 padding)
+        valid_mask = (positive_pairs[:, :, 0] >= 0) & (positive_pairs[:, :, 1] >= 0)
         
-        return total_loss / max(n_valid_batches, 1)
+        if not valid_mask.any():
+            return torch.zeros(1, device=device, dtype=start_features.dtype, requires_grad=start_features.requires_grad).squeeze()
+        
+        # Clamp indices to valid range
+        start_indices = torch.clamp(positive_pairs[:, :, 0], 0, n_frames - 1)
+        end_indices = torch.clamp(positive_pairs[:, :, 1], 0, n_frames - 1)
+        
+        # Create batch indices for advanced indexing
+        batch_indices = torch.arange(batch_size, device=device).unsqueeze(1).expand(-1, positive_pairs.size(1))
+        
+        # Gather features using advanced indexing - only for valid pairs
+        flat_batch_indices = batch_indices[valid_mask]
+        flat_start_indices = start_indices[valid_mask]
+        flat_end_indices = end_indices[valid_mask]
+        
+        if len(flat_batch_indices) == 0:
+            return torch.zeros(1, device=device, dtype=start_features.dtype, requires_grad=start_features.requires_grad).squeeze()
+        
+        anchor_features = start_features[flat_batch_indices, flat_start_indices]  # (n_valid_pairs, feature_dim)
+        positive_features = end_features[flat_batch_indices, flat_end_indices]   # (n_valid_pairs, feature_dim)
+        
+        n_valid = len(anchor_features)
+        
+        if n_valid == 0:
+            return torch.zeros(1, device=device, dtype=start_features.dtype, requires_grad=start_features.requires_grad).squeeze()
+        
+        # Normalize features for cosine similarity
+        anchor_features = F.normalize(anchor_features, p=2, dim=1)
+        positive_features = F.normalize(positive_features, p=2, dim=1)
+        
+        # Compute positive similarities (anchor-positive pairs)
+        pos_similarities = torch.sum(anchor_features * positive_features, dim=1)  # (n_valid,)
+        pos_similarities = pos_similarities / self.temperature
+        
+        # For negatives, use all other positive features as negatives for each anchor
+        if n_valid > 1:
+            # Compute similarity matrix: anchor_features @ positive_features.T
+            sim_matrix = torch.matmul(anchor_features, positive_features.t()) / self.temperature  # (n_valid, n_valid)
+            
+            # Create targets (diagonal elements are positive pairs)
+            targets = torch.arange(n_valid, device=device)
+            
+            # InfoNCE loss using cross-entropy
+            loss = F.cross_entropy(sim_matrix, targets)
+        else:
+            # If only one valid pair, return zero loss (no contrastive learning possible)
+            loss = torch.zeros(1, device=device, dtype=start_features.dtype, requires_grad=start_features.requires_grad).squeeze()
+        
+        return loss
 
 
 class CombinedLoss(nn.Module):
