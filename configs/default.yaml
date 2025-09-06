@@ -69,7 +69,7 @@ data:
   val_split: 0.1
   test_split: 0.1
   random_seed: 42
-  dataset_format: "hdf5"
+  dataset_format: "pytorch"
   cache_dir: "./cache"
 
 # Training configuration

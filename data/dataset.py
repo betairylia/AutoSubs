@@ -323,7 +323,7 @@ class PyTorchDatasetStorage:
         
         logging.info(f"Loading dataset from {self.storage_path}")
         
-        dataset_data = torch.load(self.storage_path)
+        dataset_data = torch.load(self.storage_path, weights_only=False)
         chunks = dataset_data['chunks']
         metadata = dataset_data.get('metadata', {})
         

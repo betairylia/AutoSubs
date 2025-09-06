@@ -144,4 +144,5 @@ class TrainingConfig(BaseConfig):
         if 'loss' in processed_dict and isinstance(processed_dict['loss'], dict):
             processed_dict['loss'] = LossConfig.from_dict(processed_dict['loss'])
         
-        return cls(**processed_dict)
+        # Use the base class method for type conversion
+        return super().from_dict(processed_dict)
