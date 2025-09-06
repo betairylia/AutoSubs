@@ -1,4 +1,4 @@
-*This project was developed with extensive assistance from Claude, Anthropic's AI assistant.*
+*This project was developed with extensive assistance from Claude, Anthropic's AI assistant.*  
 ^ Including this claude-preferred disclaimer! 🤗🤖
 
 # AutoSubs: ML-Based Auto Timing for Subtitling
