@@ -8,6 +8,52 @@ sys.path.append(str(Path(__file__).parent.parent))
 from config.train import LossConfig
 
 
+def _extract_valid_pairs(
+    start_features: torch.Tensor,
+    end_features: torch.Tensor, 
+    positive_pairs: torch.Tensor
+) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
+    """
+    Extract valid feature pairs from start/end features using positive_pairs indices.
+    
+    Args:
+        start_features: Start features (batch_size, n_frames, feature_dim)
+        end_features: End features (batch_size, n_frames, feature_dim)  
+        positive_pairs: Positive pairs indices (batch_size, n_pairs, 2)
+        
+    Returns:
+        Tuple of (anchor_features, positive_features) or (None, None) if no valid pairs
+    """
+    batch_size, n_frames, feature_dim = start_features.shape
+    device = start_features.device
+    
+    # Create mask for valid pairs (not -1 padding)
+    valid_mask = (positive_pairs[:, :, 0] >= 0) & (positive_pairs[:, :, 1] >= 0)
+    
+    if not valid_mask.any():
+        return None, None
+    
+    # Clamp indices to valid range
+    start_indices = torch.clamp(positive_pairs[:, :, 0], 0, n_frames - 1)
+    end_indices = torch.clamp(positive_pairs[:, :, 1], 0, n_frames - 1)
+    
+    # Create batch indices for advanced indexing
+    batch_indices = torch.arange(batch_size, device=device).unsqueeze(1).expand(-1, positive_pairs.size(1))
+    
+    # Gather features using advanced indexing - only for valid pairs
+    flat_batch_indices = batch_indices[valid_mask]
+    flat_start_indices = start_indices[valid_mask]
+    flat_end_indices = end_indices[valid_mask]
+    
+    if len(flat_batch_indices) == 0:
+        return None, None
+    
+    anchor_features = start_features[flat_batch_indices, flat_start_indices]  # (n_valid_pairs, feature_dim)
+    positive_features = end_features[flat_batch_indices, flat_end_indices]   # (n_valid_pairs, feature_dim)
+    
+    return anchor_features, positive_features
+
+
 class FocalLoss(nn.Module):
     """
     Focal Loss for addressing class imbalance in heatmap prediction.
@@ -87,33 +133,13 @@ class ContrastiveFeatureLoss(nn.Module):
         Returns:
             Contrastive loss value
         """
-        batch_size, n_frames, feature_dim = start_features.shape
         device = start_features.device
         
-        # Create mask for valid pairs (not -1 padding)
-        valid_mask = (positive_pairs[:, :, 0] >= 0) & (positive_pairs[:, :, 1] >= 0)
+        # Extract valid pairs using shared helper function
+        pos_start_feats, pos_end_feats = _extract_valid_pairs(start_features, end_features, positive_pairs)
         
-        if not valid_mask.any():
+        if pos_start_feats is None:
             return torch.zeros(1, device=device, dtype=start_features.dtype, requires_grad=start_features.requires_grad).squeeze()
-        
-        # Clamp indices to valid range
-        start_indices = torch.clamp(positive_pairs[:, :, 0], 0, n_frames - 1)
-        end_indices = torch.clamp(positive_pairs[:, :, 1], 0, n_frames - 1)
-        
-        # Create batch indices for advanced indexing
-        batch_indices = torch.arange(batch_size, device=device).unsqueeze(1).expand(-1, positive_pairs.size(1))
-        
-        # Gather features using advanced indexing - only for valid pairs
-        # Flatten for gathering
-        flat_batch_indices = batch_indices[valid_mask]
-        flat_start_indices = start_indices[valid_mask]
-        flat_end_indices = end_indices[valid_mask]
-        
-        if len(flat_batch_indices) == 0:
-            return torch.zeros(1, device=device, dtype=start_features.dtype, requires_grad=start_features.requires_grad).squeeze()
-        
-        pos_start_feats = start_features[flat_batch_indices, flat_start_indices]  # (n_valid_pairs, feature_dim)
-        pos_end_feats = end_features[flat_batch_indices, flat_end_indices]
         
         # Positive loss (pull together) - L2 distance
         pos_distances = torch.norm(pos_start_feats - pos_end_feats, p=2, dim=1)
@@ -170,37 +196,15 @@ class InfoNCELoss(nn.Module):
         Returns:
             InfoNCE loss value
         """
-        batch_size, n_frames, feature_dim = start_features.shape
         device = start_features.device
         
-        # Create mask for valid pairs (not -1 padding)
-        valid_mask = (positive_pairs[:, :, 0] >= 0) & (positive_pairs[:, :, 1] >= 0)
+        # Extract valid pairs using shared helper function
+        anchor_features, positive_features = _extract_valid_pairs(start_features, end_features, positive_pairs)
         
-        if not valid_mask.any():
+        if anchor_features is None:
             return torch.zeros(1, device=device, dtype=start_features.dtype, requires_grad=start_features.requires_grad).squeeze()
-        
-        # Clamp indices to valid range
-        start_indices = torch.clamp(positive_pairs[:, :, 0], 0, n_frames - 1)
-        end_indices = torch.clamp(positive_pairs[:, :, 1], 0, n_frames - 1)
-        
-        # Create batch indices for advanced indexing
-        batch_indices = torch.arange(batch_size, device=device).unsqueeze(1).expand(-1, positive_pairs.size(1))
-        
-        # Gather features using advanced indexing - only for valid pairs
-        flat_batch_indices = batch_indices[valid_mask]
-        flat_start_indices = start_indices[valid_mask]
-        flat_end_indices = end_indices[valid_mask]
-        
-        if len(flat_batch_indices) == 0:
-            return torch.zeros(1, device=device, dtype=start_features.dtype, requires_grad=start_features.requires_grad).squeeze()
-        
-        anchor_features = start_features[flat_batch_indices, flat_start_indices]  # (n_valid_pairs, feature_dim)
-        positive_features = end_features[flat_batch_indices, flat_end_indices]   # (n_valid_pairs, feature_dim)
         
         n_valid = len(anchor_features)
-        
-        if n_valid == 0:
-            return torch.zeros(1, device=device, dtype=start_features.dtype, requires_grad=start_features.requires_grad).squeeze()
         
         # Normalize features for cosine similarity
         anchor_features = F.normalize(anchor_features, p=2, dim=1)

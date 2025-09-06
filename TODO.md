@@ -5,7 +5,7 @@
     - SubtitleChunk.events
     - DataChunk.original_audio_file
     - DataChunk.original_subtitle_file
-- Is chunks overlapping for training? Perhaps they should not overlap.
+- Is chunks overlapping for training? Perhaps they should not overlap?
 
 ### Losses
 - FocalLoss: Auto-configure config yaml `focal_alpha` & `focal_gamma`.
