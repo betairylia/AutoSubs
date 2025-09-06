@@ -1,0 +1,126 @@
+# Default configuration for AutoSubs project
+project_name: "AutoSubs"
+version: "1.0.0"
+description: "ML-based auto timing for subtitling"
+seed: 42
+debug: false
+
+# Model configuration
+model:
+  # Audio backbone configuration
+  backbone:
+    type: "conv1d"  # "conv1d" or "transformer"
+    channels: [64, 128, 256, 512]
+    kernel_sizes: [3, 3, 3, 3]
+    strides: [1, 2, 2, 2]
+    input_dim: 128  # mel spectrogram dimension
+    output_dim: 256  # feature dimension
+    
+    # Transformer parameters (if type == "transformer")
+    d_model: 256
+    n_heads: 8
+    n_layers: 6
+    d_ff: 1024
+    dropout: 0.1
+  
+  # Head configuration
+  head:
+    hidden_dims: [256, 128]
+    dropout: 0.1
+    activation: "relu"
+    feature_dim: 128  # dimension of feature vectors for pairing
+  
+  # Post-processing parameters
+  nmp_window_size: 5
+  confidence_threshold: 0.5
+  feature_distance_threshold: 2.0
+  max_subtitle_length: 10.0
+
+# Data processing configuration
+data:
+  # File discovery
+  audio_extensions: [".mp3", ".wav", ".ogg", ".m4a", ".aac"]
+  subtitle_extensions: [".ass"]
+  
+  # Audio processing
+  audio:
+    sample_rate: 22050
+    n_mels: 128
+    n_fft: 2048
+    hop_length: 512
+    win_length: 2048
+    normalize: true
+  
+  # Chunking configuration
+  chunking:
+    chunk_duration: 30.0  # seconds
+    overlap_ratio: 0.1  # 10% overlap
+    padding_duration: 2.0  # seconds
+    timing_fps: 60  # frames per second for timing
+  
+  # Label processing
+  labels:
+    gaussian_sigma: 0.5  # seconds
+    merge_same_timestamp: true
+    timestamp_tolerance: 0.1  # seconds
+  
+  # Dataset parameters
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  random_seed: 42
+  dataset_format: "hdf5"
+  cache_dir: "./cache"
+
+# Training configuration
+training:
+  # Basic training parameters
+  epochs: 100
+  batch_size: 16
+  accumulate_grad_batches: 1
+  grad_clip_norm: 1.0
+  
+  # Device and performance
+  device: "auto"  # auto-detect
+  num_workers: 4
+  pin_memory: true
+  
+  # Validation and checkpointing
+  val_check_interval: 1000
+  save_top_k: 3
+  save_every_n_epochs: 10
+  
+  # Early stopping
+  early_stopping_patience: 15
+  early_stopping_min_delta: 0.0001
+  
+  # Logging
+  log_every_n_steps: 50
+  log_dir: "./logs"
+  experiment_name: "autosubs"
+  
+  # Optimizer configuration
+  optimizer:
+    type: "adam"
+    lr: 0.001
+    weight_decay: 0.0001
+    betas: [0.9, 0.999]
+    eps: 1e-8
+  
+  # Scheduler configuration
+  scheduler:
+    type: "cosine"
+    T_max: 100
+    eta_min: 1e-6
+  
+  # Loss configuration
+  loss:
+    focal_alpha: 0.25
+    focal_gamma: 2.0
+    feature_margin: 1.0
+    temperature: 0.1
+    heatmap_weight: 1.0
+    feature_weight: 0.5
+  
+  # Mixed precision
+  use_amp: true

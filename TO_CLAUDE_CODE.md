@@ -69,5 +69,6 @@ The project needs to be work under windows (`cuda`) and macos (`mps`). So, we ne
 
 ## Additional comments
 - **Please keep track of GT positive pairs in dataset and use the info in training**. It is usual that multiple lines of subtitle ends / starts at the exact same timestamp. In that case, treat the timestamp as a single, unified one and pair it with multiple start/ends.
+- Please store the generated dataset into disk in some format.
 - I think we don't need to generate the heatmap in dataset. Keep the labels and compute the loss w.r.t. the said Gaussian kernel is fine.
 - the designed starting/ending network should be a shallow head attached to the backbone, with no shared weights. Please also make the models easy to edit so I can play with it later.
