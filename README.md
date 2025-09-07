@@ -186,7 +186,7 @@ Contributions are welcome! This project is actively developed and we encourage c
 
 ## 📄 License
 
-[License information to be added]
+MIT (*Excluding Datasets*)
 
 ## 🙏 Acknowledgments
 
