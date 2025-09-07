@@ -12,6 +12,7 @@ from utils.device import get_available_device
 from utils.audio import audio_to_spectrogram, get_audio_duration
 from data.chunking import chunk_audio_file
 from data.subtitle import SubtitleEvent
+from datetime import timedelta
 import ass
 
 
@@ -312,10 +313,10 @@ class AutoSubsPredictor:
             
             # Create dialogue event
             dialogue = ass.Dialogue(
-                start=start_time,
-                end=end_time,
+                start=timedelta(milliseconds = start_time),
+                end=timedelta(milliseconds = end_time),
                 style=style,
-                text=f"Subtitle {i+1}"  # Placeholder text
+                text=""
             )
             doc.events.append(dialogue)
         

@@ -12,7 +12,7 @@ from config.model import BackboneConfig
 sys.path.append(str(Path(__file__).parent.parent / "whisper"))
 import whisper
 from whisper.model import Whisper
-
+import logging
 
 class PositionalEncoding(nn.Module):
     """Positional encoding for transformer."""
@@ -294,22 +294,23 @@ class WhisperBackbone(nn.Module):
         self.config = config
         
         # Load pretrained Whisper model
-        self.whisper_model = whisper.load_model(config.whisper_model_size, device="cpu")
+        whisper_model = whisper.load_model(config.whisper_model_size, device="cpu")
         
         # Extract only the encoder
-        self.encoder = self.whisper_model.encoder
+        self.encoder = whisper_model.encoder
         
         # Freeze encoder parameters
         for param in self.encoder.parameters():
             param.requires_grad = False
         
         # Store dimensions for compatibility
-        self.whisper_dims = self.whisper_model.dims
+        self.whisper_dims = whisper_model.dims
         self.n_audio_state = self.whisper_dims.n_audio_state
         self.n_audio_ctx = self.whisper_dims.n_audio_ctx  # 1500 for 30s chunks
         
         # Optional projection layer to match desired output_dim
         if config.output_dim != self.n_audio_state:
+            logging.warning(f"Whisper feature dim {self.n_audio_state} != desired output_dim {config.output_dim}, Projection inserted!")
             self.output_projection = nn.Linear(self.n_audio_state, config.output_dim)
         else:
             self.output_projection = nn.Identity()
@@ -327,11 +328,18 @@ class WhisperBackbone(nn.Module):
             where n_frames_out = 1500 (100fps for 30s) due to conv stride=2
         """
         # Whisper encoder expects (batch_size, n_mels, n_frames)
-        # Ensure input has correct n_mels dimension
-        if x.size(1) != self.whisper_dims.n_mels:
-            # If input has different n_mels, interpolate to match Whisper's expectation
-            x = F.interpolate(x, size=(self.whisper_dims.n_mels, x.size(2)), 
-                            mode='bilinear', align_corners=False)
+        # Verify input dimensions match what Whisper expects
+        expected_mels = self.whisper_dims.n_mels
+        actual_mels = x.size(1)
+        
+        if actual_mels != expected_mels:
+            raise ValueError(
+                f"Input spectrogram has {actual_mels} mel bins, but Whisper model expects {expected_mels}. "
+                f"Please either:\n"
+                f"1. Update your config to set n_mels={expected_mels}, or\n"
+                f"2. Recreate your dataset with n_mels={expected_mels}, or\n"
+                f"3. Use a different backbone type that matches your dataset"
+            )
         
         # Apply Whisper encoder
         with torch.no_grad() if not self.training else torch.enable_grad():

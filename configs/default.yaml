@@ -27,20 +27,20 @@ model:
     whisper_model_size: "base"  # "tiny", "base", "small", "medium", "large"
     
     # Common parameters
-    input_dim: 80   # mel spectrogram dimension (80 or 128 for Whisper)
+    input_dim: 80   # mel spectrogram dimension (Whisper pretrained)
     output_dim: 512  # feature dimension (matches Whisper base model)
   
   # Head configuration
   head:
-    hidden_dims: [512, 256, 128]  # Adjusted for larger Whisper features
+    hidden_dims: [512]  # Adjusted for larger Whisper features
     dropout: 0.1
     activation: "relu"
-    feature_dim: 128  # dimension of feature vectors for pairing
+    feature_dim: 16  # dimension of feature vectors for pairing
   
   # Post-processing parameters
   nmp_window_size: 5
-  confidence_threshold: 0.1
-  feature_distance_threshold: 20.0
+  confidence_threshold: 0.5
+  feature_distance_threshold: 2.0
   max_subtitle_length: 10.0
 
 # Data processing configuration
@@ -52,12 +52,12 @@ data:
   # Audio processing
   audio:
     sample_rate: 16000   # Whisper requirement
-    n_mels: 80           # Whisper default (80 or 128)
+    n_mels: 80          # Whisper pretrained models use 80/128 mels
     n_fft: 400           # Whisper requirement
     hop_length: 160      # Whisper requirement (10ms frames)
     win_length: 400      # Should match n_fft for Whisper
     normalize: true
-    use_whisper_preprocessing: true  # Use Whisper's preprocessing pipeline
+    use_whisper_preprocessing: true   # Use Whisper's preprocessing for optimal results
   
   # Chunking configuration
   chunking:
@@ -68,7 +68,7 @@ data:
   
   # Label processing
   labels:
-    gaussian_sigma: 0.5  # seconds
+    gaussian_sigma: 0.05  # seconds
     merge_same_timestamp: true
     timestamp_tolerance: 0.1  # seconds
   
@@ -83,7 +83,7 @@ data:
 # Training configuration
 training:
   # Basic training parameters
-  epochs: 1000
+  epochs: 100
   batch_size: 16
   accumulate_grad_batches: 1
   grad_clip_norm: 1.0
@@ -99,7 +99,7 @@ training:
   save_every_n_epochs: 10
   
   # Early stopping
-  early_stopping_patience: 1500
+  early_stopping_patience: 15
   early_stopping_min_delta: 0.0001
   
   # Logging
@@ -123,7 +123,7 @@ training:
   
   # Loss configuration
   loss:
-    focal_alpha: 0.25
+    focal_alpha: -1.0 # Negative for adaptive alpha
     focal_gamma: 2.0
     feature_margin: 1.0
     temperature: 0.1

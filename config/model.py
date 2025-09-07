@@ -42,7 +42,7 @@ class BackboneConfig(BaseConfig):
             assert len(self.channels) == len(self.kernel_sizes) == len(self.strides), \
                 "Conv1D parameters must have same length"
         elif self.type == "whisper":
-            valid_sizes = ["tiny", "base", "small", "medium", "large", "large-v1", "large-v2", "large-v3"]
+            valid_sizes = ["tiny", "base", "small", "medium", "large", "large-v1", "large-v2", "large-v3", "turbo"]
             assert self.whisper_model_size in valid_sizes, \
                 f"Whisper model size must be one of {valid_sizes}"
         assert self.input_dim > 0, "Input dimension must be positive"

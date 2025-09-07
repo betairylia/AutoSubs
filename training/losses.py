@@ -62,7 +62,7 @@ class FocalLoss(nn.Module):
     This is crucial for subtitle timing where most time points are negative (no subtitle events).
     """
     
-    def __init__(self, alpha: float = 0.25, gamma: float = 2.0, reduction: str = "mean"):
+    def __init__(self, alpha: float = -1, gamma: float = 2.0, reduction: str = "mean"):
         super().__init__()
         self.alpha = alpha
         self.gamma = gamma
@@ -88,9 +88,16 @@ class FocalLoss(nn.Module):
         # Compute focal weights
         pt = targets * predictions + (1 - targets) * (1 - predictions)  # pt = probability of correct class
         focal_weight = (1 - pt) ** self.gamma
+
+        # Compute optimal alpha
+        alpha = self.alpha
+        if alpha < 0:
+            sum_positive = targets.sum()
+            sum_all = torch.numel(targets)
+            alpha = 1.0 - sum_positive / sum_all
         
         # Apply alpha weighting (weight positive examples)
-        alpha_t = targets * self.alpha + (1 - targets) * (1 - self.alpha)
+        alpha_t = targets * alpha + (1 - targets) * (1 - alpha)
         focal_loss = alpha_t * focal_weight * ce_loss
         
         if self.reduction == "mean":

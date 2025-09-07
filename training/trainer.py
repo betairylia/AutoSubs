@@ -17,6 +17,7 @@ from config.train import TrainingConfig
 from config.config import Config
 from models.network import create_model, AutoSubsNetwork
 from training.losses import CombinedLoss, LossMetrics
+from training.event_metrics import compute_event_iou_for_batch
 from utils.device import get_available_device, optimize_device_settings
 from data.dataset import AutoSubsDataset
 
@@ -264,7 +265,8 @@ class AutoSubsTrainer:
             "accuracy": 0.0,
             "precision": 0.0,
             "recall": 0.0,
-            "f1": 0.0
+            "f1": 0.0,
+            "event_iou": 0.0
         }
         
         with torch.no_grad():
@@ -281,6 +283,24 @@ class AutoSubsTrainer:
                 batch_metrics = self._compute_metrics(outputs, batch, loss_dict)
                 for key, value in batch_metrics.items():
                     val_metrics[key] += value
+                
+                # Compute event-level IoU
+                try:
+                    batch_size = outputs["start_heatmap"].size(0)
+                    outputs_batch = []
+                    for i in range(batch_size):
+                        item_outputs = {k: v[i:i+1] for k, v in outputs.items()}
+                        outputs_batch.append(item_outputs)
+                    
+                    event_iou = compute_event_iou_for_batch(
+                        outputs_batch, batch, self.config.model,
+                        self.config.data.chunking.timing_fps
+                    )
+                    val_metrics["event_iou"] += event_iou
+                except Exception as e:
+                    # If event IoU computation fails, just log and continue
+                    logging.warning(f"Event IoU computation failed: {e}")
+                    val_metrics["event_iou"] += 0.0
                 
                 val_losses.append(loss_dict["total_loss"].item())
         
@@ -459,6 +479,7 @@ class AutoSubsTrainer:
             logging.info(f"Train loss: {train_metrics['total_loss']:.4f}")
             if val_metrics:
                 logging.info(f"Val loss: {val_metrics['total_loss']:.4f}")
+                logging.info(f"Val Event IoU: {val_metrics['event_iou']:.4f}")
             
             # Tensorboard logging
             self._log_to_tensorboard("train_epoch", train_metrics, epoch)

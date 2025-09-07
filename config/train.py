@@ -65,7 +65,7 @@ class LossConfig(BaseConfig):
     feature_weight: float = 0.5  # weight for feature loss
     
     def validate(self):
-        assert self.focal_alpha > 0, "Focal alpha must be positive"
+        # assert self.focal_alpha > 0, "Focal alpha must be positive"
         assert self.focal_gamma > 0, "Focal gamma must be positive"
         assert self.feature_margin > 0, "Feature margin must be positive"
         assert self.temperature > 0, "Temperature must be positive"
