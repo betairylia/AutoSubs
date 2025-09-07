@@ -99,7 +99,7 @@ training:
   save_every_n_epochs: 10
   
   # Early stopping
-  early_stopping_patience: 15
+  early_stopping_patience: 70
   early_stopping_min_delta: 0.0001
   
   # Logging
@@ -125,10 +125,11 @@ training:
   loss:
     focal_alpha: -1.0 # Negative for adaptive alpha
     focal_gamma: 2.0
+    focal_alpha_ema_momentum: 0.9  # EMA momentum for adaptive alpha smoothing
     feature_margin: 1.0
     temperature: 0.1
     heatmap_weight: 1.0
-    feature_weight: 0.5
+    feature_weight: 0.1
   
   # Mixed precision
   use_amp: false

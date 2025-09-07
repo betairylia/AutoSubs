@@ -55,6 +55,7 @@ class LossConfig(BaseConfig):
     # Focal loss parameters
     focal_alpha: float = 0.25  # weighting factor for rare class
     focal_gamma: float = 2.0  # focusing parameter
+    focal_alpha_ema_momentum: float = 0.9  # EMA momentum for adaptive alpha smoothing
     
     # Feature loss parameters
     feature_margin: float = 1.0  # margin for contrastive loss
@@ -67,6 +68,7 @@ class LossConfig(BaseConfig):
     def validate(self):
         # assert self.focal_alpha > 0, "Focal alpha must be positive"
         assert self.focal_gamma > 0, "Focal gamma must be positive"
+        assert 0.0 <= self.focal_alpha_ema_momentum <= 1.0, "Focal alpha EMA momentum must be in [0, 1]"
         assert self.feature_margin > 0, "Feature margin must be positive"
         assert self.temperature > 0, "Temperature must be positive"
         assert self.heatmap_weight >= 0, "Heatmap weight must be non-negative"

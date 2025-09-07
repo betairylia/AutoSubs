@@ -393,6 +393,7 @@ class AutoSubsTrainer:
             "optimizer_state_dict": self.optimizer.state_dict(),
             "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
             "scaler_state_dict": self.scaler.state_dict() if self.scaler else None,
+            "loss_state_dict": self.criterion.state_dict(),  # Save loss function state (EMA)
             "best_val_loss": self.best_val_loss,
             "config": asdict(self.config),
             "train_losses": self.train_losses,
@@ -427,6 +428,10 @@ class AutoSubsTrainer:
         
         if self.scaler and checkpoint["scaler_state_dict"]:
             self.scaler.load_state_dict(checkpoint["scaler_state_dict"])
+        
+        # Load loss function state (EMA) if available
+        if "loss_state_dict" in checkpoint:
+            self.criterion.load_state_dict(checkpoint["loss_state_dict"])
         
         self.current_epoch = checkpoint["epoch"]
         self.current_step = checkpoint["step"]

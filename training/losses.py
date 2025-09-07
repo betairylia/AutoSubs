@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from config.train import LossConfig
+from training.utils.ema import EMA
 
 
 def _extract_valid_pairs(
@@ -62,11 +63,15 @@ class FocalLoss(nn.Module):
     This is crucial for subtitle timing where most time points are negative (no subtitle events).
     """
     
-    def __init__(self, alpha: float = -1, gamma: float = 2.0, reduction: str = "mean"):
+    def __init__(self, alpha: float = -1, gamma: float = 2.0, ema_momentum: float = 0.9, reduction: str = "mean"):
         super().__init__()
         self.alpha = alpha
         self.gamma = gamma
+        self.ema_momentum = ema_momentum
         self.reduction = reduction
+        
+        # Initialize EMA for adaptive alpha (only used when alpha < 0)
+        self.alpha_ema = EMA(momentum=ema_momentum) if alpha < 0 else None
     
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
@@ -94,7 +99,13 @@ class FocalLoss(nn.Module):
         if alpha < 0:
             sum_positive = targets.sum()
             sum_all = torch.numel(targets)
-            alpha = 1.0 - sum_positive / sum_all
+            current_alpha = 1.0 - sum_positive / sum_all
+            
+            # Use EMA for smooth adaptive alpha
+            if self.alpha_ema is not None:
+                alpha = self.alpha_ema.update(current_alpha)
+            else:
+                alpha = current_alpha
         
         # Apply alpha weighting (weight positive examples)
         alpha_t = targets * alpha + (1 - targets) * (1 - alpha)
@@ -106,6 +117,35 @@ class FocalLoss(nn.Module):
             return focal_loss.sum()
         else:
             return focal_loss
+    
+    def state_dict(self) -> dict:
+        """Get state dict including EMA state."""
+        state = {
+            'alpha': self.alpha,
+            'gamma': self.gamma,
+            'ema_momentum': self.ema_momentum,
+            'reduction': self.reduction
+        }
+        if self.alpha_ema is not None:
+            state['alpha_ema'] = self.alpha_ema.state_dict()
+        return state
+    
+    def load_state_dict(self, state_dict: dict):
+        """Load state dict including EMA state."""
+        self.alpha = state_dict['alpha']
+        self.gamma = state_dict['gamma']
+        self.ema_momentum = state_dict['ema_momentum']
+        self.reduction = state_dict['reduction']
+        
+        if 'alpha_ema' in state_dict and self.alpha_ema is not None:
+            self.alpha_ema.load_state_dict(state_dict['alpha_ema'])
+    
+    def to(self, device):
+        """Move to device including EMA."""
+        super().to(device)
+        if self.alpha_ema is not None:
+            self.alpha_ema.to(device)
+        return self
 
 
 class ContrastiveFeatureLoss(nn.Module):
@@ -160,11 +200,15 @@ class ContrastiveFeatureLoss(nn.Module):
             # Create all pairwise combinations efficiently
             # pos_start_feats: (n_pos, feature_dim) -> (n_pos, 1, feature_dim)
             # pos_end_feats: (n_pos, feature_dim) -> (1, n_pos, feature_dim)
-            start_expanded = pos_start_feats.unsqueeze(1)  # (n_pos, 1, feature_dim)
-            end_expanded = pos_end_feats.unsqueeze(0)      # (1, n_pos, feature_dim)
+
+            # Following CornerNet implementation, use averaged embeddings
+            feat_mean = pos_start_feats + pos_end_feats / 2
+
+            col_expanded = feat_mean.unsqueeze(1)  # (n_pos, 1, feature_dim)
+            row_expanded = feat_mean.unsqueeze(0)  # (1, n_pos, feature_dim)
             
             # Compute all pairwise distances at once
-            neg_distances = torch.norm(start_expanded - end_expanded, p=2, dim=2)  # (n_pos, n_pos)
+            neg_distances = torch.norm(col_expanded - row_expanded, p=1, dim=2)  # (n_pos, n_pos)
             
             # Create mask to exclude diagonal (i != j)
             mask = ~torch.eye(n_pos, device=device, dtype=torch.bool)
@@ -252,7 +296,8 @@ class CombinedLoss(nn.Module):
         # Initialize loss components
         self.focal_loss = FocalLoss(
             alpha=config.focal_alpha,
-            gamma=config.focal_gamma
+            gamma=config.focal_gamma,
+            ema_momentum=config.focal_alpha_ema_momentum
         )
         
         self.feature_loss = ContrastiveFeatureLoss(
@@ -313,6 +358,24 @@ class CombinedLoss(nn.Module):
             "start_focal_loss": start_focal_loss,
             "end_focal_loss": end_focal_loss
         }
+    
+    def state_dict(self) -> dict:
+        """Get state dict including focal loss EMA state."""
+        return {
+            'focal_loss': self.focal_loss.state_dict(),
+            'config': self.config.__dict__
+        }
+    
+    def load_state_dict(self, state_dict: dict):
+        """Load state dict including focal loss EMA state."""
+        if 'focal_loss' in state_dict:
+            self.focal_loss.load_state_dict(state_dict['focal_loss'])
+    
+    def to(self, device):
+        """Move to device including focal loss EMA."""
+        super().to(device)
+        self.focal_loss.to(device)
+        return self
 
 
 class LossMetrics:

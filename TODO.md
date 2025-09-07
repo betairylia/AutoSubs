@@ -7,13 +7,6 @@
     - DataChunk.original_subtitle_file
 - Is chunks overlapping for training? Perhaps they should not overlap?
 
-### Logging
-- Tensorboard somehow bugs when using duplicated experiment name. Append datetime.now?
-
-### Losses
-- FocalLoss: Auto-configure config yaml `focal_alpha` & `focal_gamma`.
-    - They comes from dataset inbalance.
-
 ### Inference
 - `_merge_overlapping_chunks` should not directly merge events by time. 1.0s is also too brutal. Many events will get eliminated.
     - At least, only merge events from different chunks. Implement this first.
