@@ -10,6 +10,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from datetime import datetime
 import torch
 from torch.utils.data import DataLoader, random_split
 
@@ -70,8 +71,13 @@ def main():
     # Apply command line overrides
     if args.output_dir:
         config.training.log_dir = args.output_dir
+    
+    # Add datetime prefix to experiment name
+    datetime_prefix = datetime.now().strftime("%y%m%d-%H%M%S")
     if args.experiment_name:
-        config.training.experiment_name = args.experiment_name
+        config.training.experiment_name = f"{datetime_prefix}_{args.experiment_name}"
+    else:
+        config.training.experiment_name = f"{datetime_prefix}_{config.training.experiment_name}"
     if args.device != "auto":
         config.training.device = args.device
     if args.batch_size:
